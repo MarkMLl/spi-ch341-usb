@@ -16,6 +16,8 @@
  * published by the Free Software Foundation, version 2.
  */
 
+// FIXME: SPI to be tested. MarkMLl
+
 // uncomment following line to activate kernel debug handling
 // #define DEBUG
    #define DEBUG_PRINTK
@@ -98,15 +100,15 @@
  *  
  *  Change the default values in *ch341_board_config* for your configuraton
  *
- *  Configurable are:
+ *  Configurable for the CH341A are:
  *
- *  - Pin 15 (D0/CS0  ) as input/output/CS (CH341_PIN_MODE_IN/CH341_PIN_MODE_OUT/CH341_PIN_MODE_CS)
- *  - Pin 16 (D1/CS1  ) as input/output/CS (CH341_PIN_MODE_IN/CH341_PIN_MODE_OUT/CH341_PIN_MODE_CS)
- *  - Pin 17 (D2/CS2  ) as input/output/CS (CH341_PIN_MODE_IN/CH341_PIN_MODE_OUT/CH341_PIN_MODE_CS)
- *  - Pin 19 (D4/DOUT2) as input/output    (CH341_PIN_MODE_IN/CH341_PIN_MODE_OUT)
- *  - Pin 21 (D6/DIN2 ) as input           (CH341_PIN_MODE_IN)
+ *  - Pin 15 (D0/CS0/CTS  ) as input/output/CS (CH341_PIN_MODE_IN/CH341_PIN_MODE_OUT/CH341_PIN_MODE_CS)
+ *  - Pin 16 (D1/CS1/DSR  ) as input/output/CS (CH341_PIN_MODE_IN/CH341_PIN_MODE_OUT/CH341_PIN_MODE_CS)
+ *  - Pin 17 (D2/CS2/RI   ) as input/output/CS (CH341_PIN_MODE_IN/CH341_PIN_MODE_OUT/CH341_PIN_MODE_CS)
+ *  - Pin 19 (D4/DOUT2/OUT) as input/output    (CH341_PIN_MODE_IN/CH341_PIN_MODE_OUT)
+ *  - Pin 21 (D6/DIN2/RTS ) as input           (CH341_PIN_MODE_IN)
  *
- *  Pins 18, 20, 22 have fix configuraton and are used as SPI signals.
+ *  Pins 18, 20, 22 have fixed configuraton and are used as SPI signals.
  */
 
 struct ch341_pin_config {
@@ -118,7 +120,7 @@ struct ch341_pin_config {
  
 struct ch341_pin_config ch341_board_config[CH341_GPIO_NUM_PINS] = 
 {
-    // pin  GPIO mode           GPIO name   hwirq
+    // pin  GPIO mode           GPIO name   hwirq // Names not used. MarkMLl
     {   15, CH341_PIN_MODE_CS , "cs0"     , 0 }, // used as CS0
     {   16, CH341_PIN_MODE_CS , "cs1"     , 0 }, // used as CS1
     {   17, CH341_PIN_MODE_CS , "cs2"     , 0 }, // used as CS2
@@ -255,7 +257,12 @@ static int ch341_cfg_probe (struct ch341_device* ch341_dev)
         else // CH341_PIN_MODE_IN || CH341_PIN_MODE_OUT
         {
             // if pin is not configured as CS signal, set GPIO configuration
-            ch341_dev->gpio_names  [ch341_dev->gpio_num] = cfg->name;
+
+// DON'T force a pin (line) name, doing so will make it impossible for an API
+// user to identify which pin in /sys/class/gpio is associated with which
+// gpiochip. MarkMLl
+
+//            ch341_dev->gpio_names  [ch341_dev->gpio_num] = cfg->name;
             ch341_dev->gpio_pins   [ch341_dev->gpio_num] = cfg;
             ch341_dev->gpio_irq_map[ch341_dev->gpio_num] = -1; // no valid IRQ
             
@@ -290,9 +297,17 @@ static int ch341_cfg_probe (struct ch341_device* ch341_dev)
                 // if pin is INPUT, it has to be masked out in GPIO direction mask
                 ch341_dev->gpio_mask &= ~ch341_dev->gpio_bits[ch341_dev->gpio_num];
 
-            DEV_INFO (CH341_IF_ADDR, "%s %s gpio=%d irq=%d %s", 
+// Because this uses the module's hardcoded name which is no longer being
+// forced, the debugging message is no longer entirely accurate. MarkMLl
+
+//            DEV_INFO (CH341_IF_ADDR, "%s %s gpio=%d irq=%d %s", 
+//                      cfg->mode == CH341_PIN_MODE_IN ? "input " : "output",
+//                      cfg->name, ch341_dev->gpio_num, ch341_dev->irq_num,
+//                      cfg->hwirq ? "(hwirq)" : "");
+
+            DEV_INFO (CH341_IF_ADDR, "%s gpio=%d irq=%d %s", 
                       cfg->mode == CH341_PIN_MODE_IN ? "input " : "output",
-                      cfg->name, ch341_dev->gpio_num, ch341_dev->irq_num,
+                      ch341_dev->gpio_num, ch341_dev->irq_num,
                       cfg->hwirq ? "(hwirq)" : "");
 
             ch341_dev->irq_num++;
@@ -1121,11 +1136,23 @@ int ch341_gpio_to_irq (struct gpio_chip *chip, unsigned offset)
 }
 
 
+// Uncomment this if we do want the pins to be automatically exported in
+// /sys/class/gpio when the device is detected. This should not be the
+// normal case, but might be convenient if the user is known to be
+// unprivileged. MarkMLl
+
+// define DO_AUTO_EXPORT
+
+// FIXME: Questionable reference to ch341_board_config[i].name
+
+
 static int ch341_gpio_probe (struct ch341_device* ch341_dev)
 {
     struct gpio_chip *gpio = &ch341_dev->gpio;
     int result;
+#ifdef DO_AUTO_EXPORT
     int i, j = 0;
+#endif
 
     CHECK_PARAM_RET (ch341_dev, -EINVAL);
     
@@ -1178,6 +1205,7 @@ static int ch341_gpio_probe (struct ch341_device* ch341_dev)
     DEV_DBG (CH341_IF_ADDR, "registered GPIOs from %d to %d", 
              gpio->base, gpio->base + gpio->ngpio - 1);
 
+#ifdef DO_AUTO_EXPORT
     for (i = 0; i < CH341_GPIO_NUM_PINS; i++)
         // in case the pin is not a CS signal, it is an GPIO pin
         if (ch341_board_config[i].mode != CH341_PIN_MODE_CS)
@@ -1194,6 +1222,7 @@ static int ch341_gpio_probe (struct ch341_device* ch341_dev)
             }
             j++;
         }
+#endif
 
     ch341_dev->gpio_thread = kthread_run (&ch341_gpio_poll_function, ch341_dev, "spi-ch341-usb-poll");
 
