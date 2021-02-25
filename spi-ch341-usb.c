@@ -52,6 +52,11 @@
 #include <linux/gpio.h>
 #include <linux/irq.h>
 
+// This is in kernel 4.x spi.h but not in 5.x.
+#ifndef SPI_BIT_MASK 
+#define SPI_BIT_MASK(bits) (((bits) == 32) ? ~0U : (BIT(bits) - 1))
+#endif
+
 /** 
   * ATTENTION: 
   *
