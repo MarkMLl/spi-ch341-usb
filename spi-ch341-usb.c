@@ -17,6 +17,11 @@
  */
 
 // FIXME: SPI to be tested. MarkMLl
+// FIXME: I'm not happy about GPIO bit allocation, D4 and D6 are allocated to
+// GPIO510 and GPIO511 rather than to GPIO508 and GPIO510 which would make them
+// align with the I2C/GPIO module i2c-ch341-usb. I'm not making any attempt to
+// fix this until after I've tested SPI, if GPIO is what you need then use the
+// I2C module. MarkMLl
 
 // uncomment following line to activate kernel debug handling
 // #define DEBUG
